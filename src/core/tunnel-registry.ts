@@ -8,6 +8,7 @@ import {
   encryptPayload,
   type TunnelMessage,
 } from "@explita/infra-protocol";
+import { extractRootSubdomain } from "../lib/utils.js";
 
 export type MessageHandler = (message: TunnelMessage) => void;
 
@@ -82,14 +83,16 @@ export class TunnelRegistry {
   }
 
   add(tunnel: TunnelConnection): void {
-    this.pendingReservations.delete(tunnel.subdomain);
-    this.tunnels.set(tunnel.subdomain, tunnel);
+    const root = extractRootSubdomain(tunnel.subdomain);
+    this.pendingReservations.delete(root);
+    this.tunnels.set(root, tunnel);
   }
 
   cancelReservation(subdomain: string, tunnelId: string): void {
-    const pending = this.pendingReservations.get(subdomain);
+    const root = extractRootSubdomain(subdomain);
+    const pending = this.pendingReservations.get(root);
     if (pending && pending.tunnelId === tunnelId) {
-      this.pendingReservations.delete(subdomain);
+      this.pendingReservations.delete(root);
     }
   }
 
@@ -104,32 +107,11 @@ export class TunnelRegistry {
   }
 
   get(subdomain: string): TunnelConnection | undefined {
-    const direct = this.tunnels.get(subdomain);
-    if (direct) {
-      return direct;
-    }
-
-    // Support wildcard parent subdomains via dot (e.g. "access.ruta" -> "ruta")
-    const dotIndex = subdomain.indexOf(".");
-    if (dotIndex !== -1) {
-      const parent = subdomain.slice(dotIndex + 1);
-      const conn = this.get(parent);
-      if (conn) return conn;
-    }
-
-    // Support wildcard parent subdomains via double hyphen (e.g. "access--ruta" -> "ruta")
-    const dashIndex = subdomain.indexOf("--");
-    if (dashIndex !== -1) {
-      const parent = subdomain.slice(dashIndex + 2);
-      const conn = this.get(parent);
-      if (conn) return conn;
-    }
-
-    return undefined;
+    return this.tunnels.get(extractRootSubdomain(subdomain));
   }
 
   isReservedInGracePeriod(subdomain: string): boolean {
-    const pending = this.pendingReservations.get(subdomain);
+    const pending = this.pendingReservations.get(extractRootSubdomain(subdomain));
     return Boolean(
       pending && pending.isGracePeriod && pending.expiresAt > Date.now(),
     );
@@ -140,7 +122,8 @@ export class TunnelRegistry {
     tunnelId?: string,
     token?: string,
   ): boolean {
-    const pending = this.pendingReservations.get(subdomain);
+    const root = extractRootSubdomain(subdomain);
+    const pending = this.pendingReservations.get(root);
     if (!pending || pending.expiresAt <= Date.now()) return false;
     if (tunnelId && pending.tunnelId === tunnelId) return true;
     if (token && pending.token && pending.token === token) return true;
@@ -152,11 +135,12 @@ export class TunnelRegistry {
     tunnelId?: string,
     token?: string,
   ): Promise<{ available: boolean; reason?: string }> {
+    const root = extractRootSubdomain(subdomain);
     const now = Date.now();
-    const pending = this.pendingReservations.get(subdomain);
+    const pending = this.pendingReservations.get(root);
     if (pending) {
       if (pending.expiresAt <= now) {
-        this.pendingReservations.delete(subdomain);
+        this.pendingReservations.delete(root);
       } else {
         const isOwner =
           (tunnelId && pending.tunnelId === tunnelId) ||
@@ -166,14 +150,14 @@ export class TunnelRegistry {
           return {
             available: false,
             reason: pending.isGracePeriod
-              ? `Subdomain "${subdomain}" is reserved for a reconnecting session. Please choose another or try again later.`
-              : `Subdomain "${subdomain}" is currently being reserved by another session.`,
+              ? `Subdomain "${root}" is reserved for a reconnecting session. Please choose another or try again later.`
+              : `Subdomain "${root}" is currently being reserved by another session.`,
           };
         }
       }
     }
 
-    const local = this.tunnels.get(subdomain);
+    const local = this.get(root);
     if (local) {
       // If the socket is currently OPEN and active:
       // Only the same session (matching tunnelId) is allowed to reconnect.
@@ -192,12 +176,12 @@ export class TunnelRegistry {
 
       return {
         available: false,
-        reason: `Subdomain "${subdomain}" is already in use by an active session.\nPlease choose a different subdomain or stop the active session first.`,
+        reason: `Subdomain "${root}" is already in use by an active session.\nPlease choose a different subdomain or stop the active session first.`,
       };
     }
 
     if (tunnelId) {
-      this.pendingReservations.set(subdomain, {
+      this.pendingReservations.set(root, {
         tunnelId,
         token,
         expiresAt: now + 10_000,
@@ -217,11 +201,12 @@ export class TunnelRegistry {
     gracePeriodMs = 0,
     token?: string,
   ): void {
-    this.tunnels.delete(subdomain);
+    const root = extractRootSubdomain(subdomain);
+    this.tunnels.delete(root);
 
     if (gracePeriodMs > 0 && tunnelId) {
       const expiresAt = Date.now() + gracePeriodMs;
-      this.pendingReservations.set(subdomain, {
+      this.pendingReservations.set(root, {
         tunnelId,
         token,
         expiresAt,
@@ -229,14 +214,14 @@ export class TunnelRegistry {
       });
 
       const timer = setTimeout(() => {
-        const current = this.pendingReservations.get(subdomain);
+        const current = this.pendingReservations.get(root);
         if (current && current.expiresAt <= Date.now()) {
-          this.pendingReservations.delete(subdomain);
+          this.pendingReservations.delete(root);
         }
       }, gracePeriodMs + 500);
       timer.unref?.();
     } else {
-      this.pendingReservations.delete(subdomain);
+      this.pendingReservations.delete(root);
     }
   }
 

@@ -234,3 +234,145 @@ test("ConnectionHandler respects requireAuth: true option", async () => {
   assert.equal(ws.closeCode, 1008);
   assert.equal(ws.closeReason, "Token required");
 });
+
+test("ConnectionHandler rejects subdomains containing double hyphens (--)", async () => {
+  const registry = new TunnelRegistry();
+  const handler = new ConnectionHandler({ registry });
+
+  const ws = new MockWebSocket();
+  handler.handle(ws as any);
+
+  ws.emit(
+    "message",
+    encode({
+      type: "hello",
+      version: PROTOCOL_VERSION,
+      subdomain: "access--app-api",
+    }),
+  );
+
+  await new Promise((r) => setImmediate(r));
+
+  assert.equal(ws.closeCode, 1008);
+  assert.equal(ws.closeReason, "Invalid subdomain");
+  const err = ws.sentMessages.find((m) => m.type === "error");
+  assert.match(err.message, /double hyphens/);
+});
+
+test("ConnectionHandler rejects subdomains starting or ending with a hyphen", async () => {
+  const registry = new TunnelRegistry();
+  const handler = new ConnectionHandler({ registry });
+
+  const ws = new MockWebSocket();
+  handler.handle(ws as any);
+
+  ws.emit(
+    "message",
+    encode({
+      type: "hello",
+      version: PROTOCOL_VERSION,
+      subdomain: "-myapp-",
+    }),
+  );
+
+  await new Promise((r) => setImmediate(r));
+
+  assert.equal(ws.closeCode, 1008);
+  assert.equal(ws.closeReason, "Invalid subdomain");
+});
+
+test("ConnectionHandler rejects compound reserved subdomains (e.g. preview--api)", async () => {
+  const registry = new TunnelRegistry();
+  const handler = new ConnectionHandler({ registry });
+
+  const ws = new MockWebSocket();
+  handler.handle(ws as any);
+
+  ws.emit(
+    "message",
+    encode({
+      type: "hello",
+      version: PROTOCOL_VERSION,
+      subdomain: "preview--api",
+    }),
+  );
+
+  await new Promise((r) => setImmediate(r));
+
+  assert.equal(ws.closeCode, 1008);
+  // It is intercepted as reserved or invalid
+  assert.ok(
+    ws.closeReason === "Subdomain reserved" ||
+      ws.closeReason === "Invalid subdomain",
+  );
+});
+
+test("ConnectionHandler rejects subdomains containing double hyphens (--)", async () => {
+  const registry = new TunnelRegistry();
+  const handler = new ConnectionHandler({ registry });
+
+  const ws = new MockWebSocket();
+  handler.handle(ws as any);
+
+  ws.emit(
+    "message",
+    encode({
+      type: "hello",
+      version: PROTOCOL_VERSION,
+      subdomain: "access--ruta",
+    }),
+  );
+
+  await new Promise((r) => setImmediate(r));
+
+  assert.equal(ws.closeCode, 1008);
+  assert.equal(ws.closeReason, "Invalid subdomain");
+  const err = ws.sentMessages.find((m) => m.type === "error");
+  assert.match(err.message, /double hyphens/);
+});
+
+test("ConnectionHandler rejects subdomains starting or ending with a hyphen", async () => {
+  const registry = new TunnelRegistry();
+  const handler = new ConnectionHandler({ registry });
+
+  const ws = new MockWebSocket();
+  handler.handle(ws as any);
+
+  ws.emit(
+    "message",
+    encode({
+      type: "hello",
+      version: PROTOCOL_VERSION,
+      subdomain: "-myapp-",
+    }),
+  );
+
+  await new Promise((r) => setImmediate(r));
+
+  assert.equal(ws.closeCode, 1008);
+  assert.equal(ws.closeReason, "Invalid subdomain");
+});
+
+test("ConnectionHandler rejects compound reserved subdomains (e.g. preview--api)", async () => {
+  const registry = new TunnelRegistry();
+  const handler = new ConnectionHandler({ registry });
+
+  const ws = new MockWebSocket();
+  handler.handle(ws as any);
+
+  ws.emit(
+    "message",
+    encode({
+      type: "hello",
+      version: PROTOCOL_VERSION,
+      subdomain: "preview--api",
+    }),
+  );
+
+  await new Promise((r) => setImmediate(r));
+
+  assert.equal(ws.closeCode, 1008);
+  // It is intercepted as reserved or invalid
+  assert.ok(ws.closeReason === "Subdomain reserved" || ws.closeReason === "Invalid subdomain");
+});
+

@@ -19,7 +19,7 @@ test("HostRouter.isReservedSubdomain identifies default reserved subdomains and 
   assert.equal(hostRouter.isReservedSubdomain("admin"), true);
   assert.equal(hostRouter.isReservedSubdomain("api"), true);
   assert.equal(hostRouter.isReservedSubdomain("status"), true);
-  assert.equal(hostRouter.isReservedSubdomain("nested.admin"), true);
+  assert.equal(hostRouter.isReservedSubdomain("nested--admin"), true);
   assert.equal(hostRouter.isReservedSubdomain("preview--api"), true);
   assert.equal(hostRouter.isReservedSubdomain("my-unreserved-app-xyz"), false);
 });

@@ -17,8 +17,12 @@ import {
   renderTunnelReconnectingHtml,
   renderTunnelTimeoutHtml,
   renderUnauthorizedHtml,
-} from "../views/error-page.js";
-import { checkBasicAuth, prepareForwardHeaders } from "../lib/utils.js";
+} from "../views/index.js";
+import {
+  checkBasicAuth,
+  extractRootSubdomain,
+  prepareForwardHeaders,
+} from "../lib/utils.js";
 import {
   metricsCollector,
   type MetricsCollector,
@@ -72,21 +76,22 @@ export class RequestProxy {
     reply: FastifyReply,
     subdomain: string,
   ) {
-    const tunnel = this.registry.get(subdomain);
+    const rootSubdomain = extractRootSubdomain(subdomain);
+    const tunnel = this.registry.get(rootSubdomain);
 
     if (!tunnel) {
-      if (this.registry.isReservedInGracePeriod(subdomain)) {
+      if (this.registry.isReservedInGracePeriod(rootSubdomain)) {
         return reply
           .code(503)
           .header("Retry-After", "10")
           .type("text/html; charset=utf-8")
-          .send(renderTunnelReconnectingHtml(subdomain, request.hostname));
+          .send(renderTunnelReconnectingHtml(rootSubdomain, request.hostname));
       }
 
       return reply
         .code(404)
         .type("text/html; charset=utf-8")
-        .send(renderTunnelNotFoundHtml(subdomain, request.hostname));
+        .send(renderTunnelNotFoundHtml(rootSubdomain, request.hostname));
     }
 
     // IP / CIDR Allowlist enforcement
@@ -97,7 +102,7 @@ export class RequestProxy {
         if (accept.includes("text/html")) {
           return reply
             .type("text/html; charset=utf-8")
-            .send(renderForbiddenHtml(subdomain, request.hostname, request.ip));
+            .send(renderForbiddenHtml(rootSubdomain, request.hostname, request.ip));
         }
 
         return reply.type("application/json; charset=utf-8").send({
@@ -112,7 +117,7 @@ export class RequestProxy {
     if (tunnel.auth) {
       const authHeader = request.headers["authorization"];
       if (!checkBasicAuth(authHeader, tunnel.auth)) {
-        const safeRealm = subdomain.replace(/["\\]/g, "");
+        const safeRealm = rootSubdomain.replace(/["\\]/g, "");
         reply
           .code(401)
           .header(
@@ -124,7 +129,7 @@ export class RequestProxy {
         if (accept.includes("text/html")) {
           return reply
             .type("text/html; charset=utf-8")
-            .send(renderUnauthorizedHtml(subdomain, request.hostname));
+            .send(renderUnauthorizedHtml(rootSubdomain, request.hostname));
         }
 
         return reply.type("application/json; charset=utf-8").send({
@@ -211,7 +216,7 @@ export class RequestProxy {
           reply
             .code(504)
             .type("text/html; charset=utf-8")
-            .send(renderTunnelTimeoutHtml(subdomain, request.hostname));
+            .send(renderTunnelTimeoutHtml(rootSubdomain, request.hostname));
         } else {
           reply.raw.destroy();
         }
@@ -224,7 +229,7 @@ export class RequestProxy {
           reply
             .code(502)
             .type("text/html; charset=utf-8")
-            .send(renderTunnelNotFoundHtml(subdomain, request.hostname));
+            .send(renderTunnelNotFoundHtml(rootSubdomain, request.hostname));
         } else {
           reply.raw.destroy();
         }
@@ -337,7 +342,7 @@ export class RequestProxy {
                 .type("text/html; charset=utf-8")
                 .send(
                   renderBadGatewayHtml({
-                    subdomain,
+                    subdomain: rootSubdomain,
                     host: request.hostname,
                     port: msg.port,
                     errorMessage: msg.message,

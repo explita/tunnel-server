@@ -1,7 +1,20 @@
 import "@explita/env-loader/auto";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { prepareForwardHeaders } from "../src/lib/utils.js";
+import {
+  extractRootSubdomain,
+  prepareForwardHeaders,
+} from "../src/lib/utils.js";
+
+test("extractRootSubdomain extracts base root subdomain by stripping prefixes", () => {
+  assert.equal(extractRootSubdomain("app-api"), "app-api");
+  assert.equal(extractRootSubdomain("access--app-api"), "app-api");
+  assert.equal(extractRootSubdomain("preview--access--app-api"), "app-api");
+  assert.equal(extractRootSubdomain("my-app"), "my-app");
+  assert.equal(extractRootSubdomain("access--my-app"), "my-app");
+  assert.equal(extractRootSubdomain("access--"), "access");
+  assert.equal(extractRootSubdomain(""), "");
+});
 
 test("prepareForwardHeaders strips via and spoofed x-explita headers", () => {
   const headers = prepareForwardHeaders({

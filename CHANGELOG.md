@@ -5,6 +5,22 @@ All notable changes to the **Explita Tunnel Server** will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2026-11-18
+
+### Fixed
+
+- **Error Views CLI Command Subdomain**:
+  - Normalized subdomains passed to error views (`renderBadGatewayHtml`, `renderTunnelNotFoundHtml`, `renderTunnelReconnectingHtml`, `renderTunnelTimeoutHtml`, `renderForbiddenHtml`, `renderUnauthorizedHtml`) using `extractRootSubdomain()`.
+  - Fixed an issue where CLI restart commands in error pages showed compound wildcard prefixes (e.g. `eta 3000 -s access--ruta`) instead of the registered root subdomain (`eta 3000 -s ruta`).
+  - Preserved the full incoming `request.hostname` for accurate diagnostic and connection detail displays.
+
+### Changed
+
+- **Wildcard Subdomain Resolution & Routing**:
+  - Unified `TunnelRegistry.get()` and `isReservedInGracePeriod()` to resolve directly via `extractRootSubdomain()`, removing manual recursive string slicing.
+  - Streamlined `HostRouter.isReservedSubdomain()` to check extracted root subdomains and removed obsolete multi-level dot checks.
+  - Hardened tunnel registration in `ConnectionHandler` with `isValidSubdomain()` to reject subdomains containing double hyphens (`--`) or boundary hyphens.
+
 ## [0.1.0] - 2026-10-25
 
 Initial release of **Explita Tunnel Server**, a high-performance reverse tunneling edge gateway server with authenticated payload encryption and multi-tenant routing.

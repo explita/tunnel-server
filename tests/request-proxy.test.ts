@@ -132,3 +132,122 @@ test("RequestProxy allows authorized IP", async () => {
   );
   assert.equal(tunnelReceivedRequest, true);
 });
+
+test("RequestProxy strips subdomain prefixes for 502 Bad Gateway view while preserving requested host", async () => {
+  const registry = new TunnelRegistry();
+  const proxy = new RequestProxy(registry);
+
+  const mockTunnel: any = {
+    id: "tunnel-app-api",
+    subdomain: "app-api",
+    socket: {
+      readyState: 1,
+      on: () => {},
+      once: () => {},
+      off: () => {},
+    },
+    send: () => {},
+    registerHandler: (id: string, handler: any) => {
+      setImmediate(() => {
+        handler({
+          type: "error",
+          id,
+          port: 3000,
+          message: "fetch failed",
+        });
+      });
+      return () => {};
+    },
+  };
+
+  registry.add(mockTunnel);
+
+  let statusCode = 200;
+  let sentHtml = "";
+
+  const mockReply: any = {
+    code: (c: number) => {
+      statusCode = c;
+      return mockReply;
+    },
+    type: () => mockReply,
+    send: (body: string) => {
+      sentHtml = body;
+      return mockReply;
+    },
+    raw: {
+      headersSent: false,
+      destroy: () => {},
+      on: () => {},
+      off: () => {},
+    },
+  };
+
+  const mockRequest: any = {
+    ip: "127.0.0.1",
+    hostname: "access--app-api.explita.test",
+    method: "GET",
+    protocol: "http",
+    url: "/api",
+    headers: {
+      accept: "text/html",
+    },
+  };
+
+  await proxy.forward(
+    mockRequest as FastifyRequest,
+    mockReply as FastifyReply,
+    "access--app-api",
+  );
+
+  assert.equal(statusCode, 502);
+  // cliCommand should recommend "eta 3000 -s app-api" NOT "access--app-api"
+  assert.match(sentHtml, /eta 3000 -s app-api/);
+  assert.doesNotMatch(sentHtml, /eta 3000 -s access--app-api/);
+  // Requested host must be preserved for context
+  assert.match(sentHtml, /access--app-api\.explita\.test/);
+});
+
+test("RequestProxy strips subdomain prefixes for 404 Not Found view while preserving requested host", async () => {
+  const registry = new TunnelRegistry();
+  const proxy = new RequestProxy(registry);
+
+  let statusCode = 200;
+  let sentHtml = "";
+
+  const mockReply: any = {
+    code: (c: number) => {
+      statusCode = c;
+      return mockReply;
+    },
+    type: () => mockReply,
+    send: (body: string) => {
+      sentHtml = body;
+      return mockReply;
+    },
+  };
+
+  const mockRequest: any = {
+    ip: "127.0.0.1",
+    hostname: "access--app-api.explita.test",
+    method: "GET",
+    protocol: "http",
+    url: "/",
+    headers: {
+      accept: "text/html",
+    },
+  };
+
+  await proxy.forward(
+    mockRequest as FastifyRequest,
+    mockReply as FastifyReply,
+    "access--app-api",
+  );
+
+  assert.equal(statusCode, 404);
+  // cliCommand should recommend "eta 3000 -s app-api" NOT "access--app-api"
+  assert.match(sentHtml, /eta 3000 -s app-api/);
+  assert.doesNotMatch(sentHtml, /eta 3000 -s access--app-api/);
+  // Requested host must be preserved for context
+  assert.match(sentHtml, /access--app-api\.explita\.test/);
+});

@@ -84,3 +84,22 @@ export function checkBasicAuth(
 export function getTodayDateString(): string {
   return new Date().toISOString().split("T")[0];
 }
+
+/**
+ * Extracts the base root subdomain by stripping wildcard prefix hyphens (e.g. "access--app-api" -> "app-api").
+ */
+export function extractRootSubdomain(subdomain?: string): string {
+  if (!subdomain) return "";
+  const sub = subdomain.toLowerCase();
+  return sub.split("--").filter(Boolean).pop() || sub;
+}
+
+export function isValidSubdomain(subdomain?: string): boolean {
+  if (!subdomain) return false;
+  return (
+    /^[a-z0-9-]+$/.test(subdomain.toLowerCase()) &&
+    subdomain.split("--").length === 1 &&
+    !subdomain.startsWith("-") &&
+    !subdomain.endsWith("-")
+  );
+}

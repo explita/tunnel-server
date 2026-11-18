@@ -10,7 +10,6 @@ import {
   MAX_SUBDOMAIN_LENGTH,
   MAX_CONCURRENT_TUNNELS,
   MAX_SESSION_DURATION_MS,
-  DEFAULT_RECONNECT_GRACE_PERIOD_MS,
   PROTOCOL_VERSION,
   type TunnelMessage,
   type TunnelReady,
@@ -31,6 +30,8 @@ import {
   reconnectGracePeriodMs,
   reservedSubdomains,
 } from "../lib/constants.js";
+import { isValidSubdomain } from "../lib/utils.js";
+import { hostRouter } from "./host-router.js";
 
 export type AuthResult =
   | { success: true }
@@ -270,7 +271,7 @@ export class ConnectionHandler {
             return;
           }
 
-          if (reservedSubdomains.has(requested)) {
+          if (hostRouter.isReservedSubdomain(requested)) {
             socket.send(
               encode({
                 type: "error",
@@ -286,6 +287,17 @@ export class ConnectionHandler {
               encode({
                 type: "error",
                 message: `Subdomain "${requested}" is invalid. Subdomains may only contain lowercase letters, numbers, and hyphens.`,
+              }),
+            );
+            socket.close(1008, "Invalid subdomain");
+            return;
+          }
+
+          if (!isValidSubdomain(requested)) {
+            socket.send(
+              encode({
+                type: "error",
+                message: `Subdomain "${requested}" is invalid. Subdomains cannot start or end with a hyphen, or contain double hyphens ("--").`,
               }),
             );
             socket.close(1008, "Invalid subdomain");

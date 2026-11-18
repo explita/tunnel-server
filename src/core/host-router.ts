@@ -4,6 +4,7 @@ import { requestProxy } from "./request-proxy.js";
 import { wsProxy } from "./ws-proxy.js";
 import { getHealthInfo, type HealthInfo } from "../services/health/index.js";
 import { baseDomain, docsUrl, reservedSubdomains } from "../lib/constants.js";
+import { extractRootSubdomain } from "../lib/utils.js";
 
 export type { HealthInfo };
 
@@ -26,19 +27,8 @@ export class HostRouter {
   };
 
   isReservedSubdomain = (subdomain: string): boolean => {
-    const sub = subdomain.toLowerCase();
-    if (reservedSubdomains.has(sub)) return true;
-    const dotIndex = sub.lastIndexOf(".");
-    if (dotIndex !== -1) {
-      const rootParent = sub.slice(dotIndex + 1);
-      if (reservedSubdomains.has(rootParent)) return true;
-    }
-    const dashIndex = sub.lastIndexOf("--");
-    if (dashIndex !== -1) {
-      const rootParent = sub.slice(dashIndex + 2);
-      if (reservedSubdomains.has(rootParent)) return true;
-    }
-    return false;
+    const sub = extractRootSubdomain(subdomain);
+    return reservedSubdomains.has(sub);
   };
 
   handleRootRequest = async (request: FastifyRequest, reply: FastifyReply) => {
